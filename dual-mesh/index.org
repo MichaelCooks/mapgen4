@@ -302,7 +302,7 @@ Feel free to look at [[https://github.com/redblobgames/dual-mesh][@redblobgames/
   <script type="module" src="dual-mesh-diagrams.js"></script>
 </x:head>
 <x:footer>
-  Created 31 Mar 2023 with the help of <a href="https://v2.vuejs.org/">Vue.js v2</a>; &#160;
+  Created 31 Mar 2023 with the help of <a href="https://v2.vuejs.org/">Vue.js v2</a>;
   <!-- hhmts start -->Last modified: 24 Jun 2024<!-- hhmts end -->
 </x:footer>
 #+end_export
