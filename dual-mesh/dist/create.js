@@ -30,6 +30,7 @@
    for (let p of points) { generator.addPoint(p); }
    points = generator.fill();
 
+   points = points.map(([x, y]) => [x + left, y + top]);
    let init = {points, delaunator: Delaunator.from(points), numBoundaryPoints};
    init = TriangleMesh.addGhostStructure(init);
    let mesh = new TriangleMesh(init);
@@ -47,7 +48,7 @@ export function checkTriangleInequality({ points, delaunator: { triangles, halfe
         let p0 = points[r0], p1 = points[r1], p2 = points[r2];
         let d0 = [p0[0] - p1[0], p0[1] - p1[1]];
         let d2 = [p2[0] - p1[0], p2[1] - p1[1]];
-        let dotProduct = d0[0] * d2[0] + d0[1] + d2[1];
+        let dotProduct = d0[0] * d2[0] + d0[1] * d2[1];
         let angleDegrees = 180 / Math.PI * Math.acos(dotProduct);
         if (angleDegrees < badAngleLimit) {
             summary[angleDegrees | 0]++;

@@ -3,7 +3,7 @@
 #+date: <2023-03-31 Fri>
 #+vue: t
 
-My Dual-Mesh library is something I use for my own projects, to wrap the functions in the [[https://mapbox.github.io/delaunator/][Delaunator Guide]].  License: Apache-v2. *I use this for my own projects and make breaking changes occasionally*.
+My Dual-Mesh library is something I use for my own projects to wrap the functions in the [[https://mapbox.github.io/delaunator/][Delaunator Guide]].  License: Apache-v2. *I use this for my own projects and make breaking changes occasionally*. I have previously published [[https://github.com/redblobgames/dual-mesh][version 2 on GitHub]]. This page describes version 3, which is /not/ yet on GitHub. However, you can browse the version [[https://github.com/redblobgames/mapgen4][in the mapgen4/dual-mesh folder]].
 
 For some of my map generation projects I've used an [[https://en.wikipedia.org/wiki/Types_of_mesh#Unstructured_grids][unstructured grid]] instead of regular grids to add variety and interestingness to the maps. I need a way to represent polygon regions (red points, outline in white) including their corners (blue points):
 
@@ -182,8 +182,8 @@ But, barely inside means there's a tiny gap between the boundary points and the 
 
 Public data includes:
 
-- ~numSides, ~numSolidSides~
-- ~numRegions, ~numSolidRegions~
+- ~numSides~, ~numSolidSides~
+- ~numRegions~, ~numSolidRegions~
 - ~numTriangles~, ~numSolidTriangles~
 - ~numBoundaryRegions~
 
@@ -240,7 +240,7 @@ For my 2010 polygon-map-generator project (Flash) I wrote a wrapper around the a
 :CUSTOM_ID: source
 :END:
 
-Feel free to look at [[https://github.com/redblobgames/dual-mesh][@redblobgames/dual-mesh]], but at the moment I'm writing it only for myself and don't intend for others to use it. *I do make breaking changes.*
+Feel free to look at [[https://github.com/redblobgames/dual-mesh][@redblobgames/dual-mesh]] for v2, but at the moment I'm writing it only for myself and don't intend for others to use it. *I do make breaking changes.* Or look at [[href:index.ts][index.ts]] and [[href:create.ts][create.ts]] for v3 (it's not  yet on github).
 
 #+begin_export html
 <style>
@@ -302,7 +302,7 @@ Feel free to look at [[https://github.com/redblobgames/dual-mesh][@redblobgames/
   <script type="module" src="dual-mesh-diagrams.js"></script>
 </x:head>
 <x:footer>
-  Created 31 Mar 2023 with the help of <a href="https://v2.vuejs.org/">Vue.js v2</a>; &#160;
-  <!-- hhmts start -->Last modified: 24 Jun 2024<!-- hhmts end -->
+  Created 31 Mar 2023 with the help of <a href="https://v2.vuejs.org/">Vue.js v2</a>;
+  <!-- hhmts start -->Last modified: 14 Jan 2025<!-- hhmts end -->
 </x:footer>
 #+end_export

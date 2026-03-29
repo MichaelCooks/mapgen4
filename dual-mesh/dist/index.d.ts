@@ -59,8 +59,8 @@ export declare class TriangleMesh {
     _halfedges: Int32Array;
     _triangles: Int32Array;
     _s_of_r: Int32Array;
-    _vertex_t: Array<[number, number]>;
-    _vertex_r: Array<[number, number]>;
+    _vertex_t: Array<Point>;
+    _vertex_r: Array<Point>;
     _options: any;
     /**
      * Constructor takes partial mesh information from Delaunator and
@@ -76,7 +76,7 @@ export declare class TriangleMesh {
      *
      * Use if you have updated the triangles/halfedges with Delaunator
      * and want the dual mesh to match the updated data. Note that
-     * this DOES not update boundary regions or ghost elements.
+     * this does NOT update boundary regions or ghost elements.
      */
     _update(): void;
     /**

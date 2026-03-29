@@ -79,7 +79,7 @@ export class TriangleMesh {
      *
      * Use if you have updated the triangles/halfedges with Delaunator
      * and want the dual mesh to match the updated data. Note that
-     * this DOES not update boundary regions or ghost elements.
+     * this does NOT update boundary regions or ghost elements.
      */
     _update() {
         let { _triangles, _halfedges, _vertex_r, _vertex_t } = this;

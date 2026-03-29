@@ -35,7 +35,7 @@ function MeshBuilder(bounds, points, boundarySpacing, exteriorBoundaryToo=false)
 
     points = exteriorBoundary.concat(points);
     let init = {
-        points: exteriorBoundary.concat(points),
+        points,
         delaunator: Delaunator.from(points),
         numBoundaryPoints: interiorBoundary.length + exteriorBoundary.length,
     };
