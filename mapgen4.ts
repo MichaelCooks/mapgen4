@@ -124,25 +124,7 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
             slider.addEventListener('touchmove', handleTouch);
             slider.addEventListener('touchstart', handleTouch);
 
-            let resetButton = document.createElement('button');
-            resetButton.setAttribute('type', 'button');
-            resetButton.textContent = '↺';
-            resetButton.title = `Reset ${name}`;
-            resetButton.style.marginLeft = '0.5em';
-            resetButton.style.fontSize = '90%';
-            resetButton.style.width = '2.2em';
-            resetButton.style.height = '2em';
-            resetButton.style.flex = '0 0 auto';
 
-            resetButton.addEventListener('click', () => {
-                param[phase][name] = initialValue;
-                slider.value = initialValue.toString();
-
-                requestAnimationFrame(() => {
-                    if (phase === 'render') { redraw(); }
-                    else { generate(); }
-                });
-            });
 
             let controls = document.createElement('div');
             controls.style.display = 'flex';
@@ -151,7 +133,7 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
             slider.style.flex = '1 1 auto';
             controls.appendChild(slider);
-            controls.appendChild(resetButton);
+
 
             let label = document.createElement('label');
             label.setAttribute('id', `slider-${name}`);
