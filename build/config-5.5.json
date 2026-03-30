@@ -1,0 +1,11 @@
+{
+  "spacing": 5.5,
+  "mountainSpacing": 35,
+  "mesh": {
+    "seed": 12345
+  },
+  "elevation": {},
+  "biomes": {},
+  "rivers": {},
+  "render": {}
+}
