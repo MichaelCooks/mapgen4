@@ -20,7 +20,6 @@ import Renderer from "./render.ts";
 import type {Mesh} from "./types.d.ts";
 
 
-
 // each parameter is [initial value, low, high]
 const initialParams = {
     elevation: [
@@ -63,38 +62,47 @@ const initialParams = {
         ['outline_water', 13.0, 0, 20], // things start going wrong when this is high
         ['biome_colors', 1, 0, 1],
     ],
-};
+} as const;
 
-    
-/**
- * Starts the UI, once the mesh has been loaded in.
- */
+type Phase = keyof typeof initialParams;
+
+const sliderMap = new Map<string, HTMLInputElement>();
+
+function clamp(value: number, min: number, max: number): number {
+    if (!Number.isFinite(value)) return min;
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+
 function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
     let render = new Renderer(mesh);
 
     /* set initial parameters */
-    for (let phase of ['elevation', 'biomes', 'rivers', 'render']) {
+    for (let phase of ['elevation', 'biomes', 'rivers', 'render'] as Phase[]) {
         const container = document.createElement('div');
         const header = document.createElement('h3');
         header.appendChild(document.createTextNode(phase));
         container.appendChild(header);
-        document.getElementById('sliders').appendChild(container);
+        document.getElementById('sliders')!.appendChild(container);
+
         for (let [name, initialValue, min, max] of initialParams[phase]) {
-            const step = name === 'seed'? 1 : 0.001;
+            const step = name === 'seed' ? 1 : 0.001;
             param[phase][name] = initialValue;
 
             let span = document.createElement('span');
             span.appendChild(document.createTextNode(name));
-            
+
             let slider = document.createElement('input');
-            slider.setAttribute('type', name === 'seed'? 'number' : 'range');
-            slider.setAttribute('min', min);
-            slider.setAttribute('max', max);
+            slider.setAttribute('type', name === 'seed' ? 'number' : 'range');
+            slider.setAttribute('min', min.toString());
+            slider.setAttribute('max', max.toString());
             slider.setAttribute('step', step.toString());
+
             slider.addEventListener('input', _event => {
                 param[phase][name] = slider.valueAsNumber;
                 requestAnimationFrame(() => {
-                    if (phase == 'render') { redraw(); }
+                    if (phase === 'render') { redraw(); }
                     else { generate(); }
                 });
             });
@@ -111,7 +119,8 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
                 slider.dispatchEvent(new Event('input'));
                 event.preventDefault();
                 event.stopPropagation();
-            };
+            }
+
             slider.addEventListener('touchmove', handleTouch);
             slider.addEventListener('touchstart', handleTouch);
 
@@ -121,10 +130,12 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
             label.appendChild(slider);
 
             container.appendChild(label);
-            slider.value = initialValue;
+            slider.value = initialValue.toString();
+
+            sliderMap.set(`${phase}.${name}`, slider);
         }
     }
-    
+
     function redraw() {
         render.updateView(param.render);
     }
@@ -134,8 +145,7 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
         render.screenshotCallback = () => {
             let a = document.createElement('a');
             render.screenshotCanvas.toBlob(blob => {
-                // TODO: Firefox doesn't seem to allow a.click() to
-                // download; is it everyone or just my setup?
+                if (!blob) return;
                 a.href = URL.createObjectURL(blob);
                 a.setAttribute('download', `mapgen4-${param.elevation.seed}.png`);
                 a.click();
@@ -143,7 +153,165 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
         };
         render.updateView(param.render);
     }
+
+    /* Download current live config as JSON */
+    function downloadConfig() {
+        const a = document.createElement('a');
+        const blob = new Blob(
+            [JSON.stringify(param, null, 2)],
+            { type: 'application/json' }
+        );
+
+        a.href = URL.createObjectURL(blob);
+        a.setAttribute('download', `mapgen4-config-${param.elevation.seed}.json`);
+        a.click();
+
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function importConfig() {
+        const input = document.getElementById('input-import-config') as HTMLInputElement | null;
+        input?.click();
+    }
+
+    function applyImportedConfig(imported: any) {
+        for (let phase of ['elevation', 'biomes', 'rivers', 'render'] as Phase[]) {
+            if (!imported[phase] || typeof imported[phase] !== 'object') continue;
+
+            for (let [name, _initialValue, min, max] of initialParams[phase]) {
+                const value = imported[phase][name];
+                if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+
+                const clamped = clamp(value, min, max);
+                param[phase][name] = clamped;
+
+                const slider = sliderMap.get(`${phase}.${name}`);
+                if (slider) slider.value = clamped.toString();
+            }
+        }
+    }
+
+    async function handleImportConfig(event: Event) {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const imported = JSON.parse(text);
+
+            applyImportedConfig(imported);
+            Painting.setElevationParam(param.elevation);
+            updateUI();
+
+            requestAnimationFrame(() => {
+                generate();
+                redraw();
+            });
+        } catch (err) {
+            console.error("Failed to import config", err);
+            alert("Could not import config JSON.");
+        } finally {
+            input.value = "";
+        }
+    }
+
+    /* Download painted terrain only */
+    function downloadPaint() {
+        const payload = {
+            size: Painting.size,
+            constraints: Array.from(Painting.constraints as ArrayLike<number>),
+        };
+
+        const a = document.createElement('a');
+        const blob = new Blob(
+            [JSON.stringify(payload, null, 2)],
+            { type: 'application/json' }
+        );
+
+        a.href = URL.createObjectURL(blob);
+        a.setAttribute('download', `mapgen4-paint-${param.elevation.seed}.json`);
+        a.click();
+
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function importPaint() {
+        const input = document.getElementById('input-import-paint') as HTMLInputElement | null;
+        input?.click();
+    }
+
+    async function handleImportPaint(event: Event) {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
     
+        try {
+            const text = await file.text();
+            const imported = JSON.parse(text);
+    
+            if (typeof imported !== 'object' || imported === null) {
+                throw new Error("Invalid paint file");
+            }
+    
+            let size = imported.size;
+            let rawConstraints = imported.constraints;
+    
+            if (
+                rawConstraints &&
+                typeof rawConstraints === 'object' &&
+                !Array.isArray(rawConstraints) &&
+                'constraints' in rawConstraints
+            ) {
+                if (typeof rawConstraints.size === 'number' && Number.isFinite(rawConstraints.size)) {
+                    size = rawConstraints.size;
+                }
+                rawConstraints = rawConstraints.constraints;
+            }
+    
+            if (rawConstraints === undefined && imported.elevation !== undefined) {
+                rawConstraints = imported.elevation;
+            }
+    
+            let constraintArray: number[];
+    
+            if (Array.isArray(rawConstraints)) {
+                constraintArray = rawConstraints;
+            } else if (rawConstraints && typeof rawConstraints === 'object') {
+                constraintArray = Object.keys(rawConstraints)
+                    .map(k => Number(k))
+                    .filter(k => Number.isInteger(k))
+                    .sort((a, b) => a - b)
+                    .map(k => rawConstraints[k]);
+            } else {
+                throw new Error("Paint file is missing constraints array");
+            }
+    
+            if (typeof size === 'number' && Number.isFinite(size)) {
+                Painting.size = size;
+            }
+    
+            const target = Painting.constraints as Float32Array;
+            target.fill(0);
+    
+            const n = Math.min(target.length, constraintArray.length);
+            for (let i = 0; i < n; i++) {
+                target[i] = Number(constraintArray[i]) || 0;
+            }
+    
+            updateUI();
+            requestAnimationFrame(() => {
+                generate();
+                redraw();
+            });
+        } catch (err) {
+            console.error("Failed to import painted terrain", err);
+            alert("Could not import painted terrain JSON.");
+        } finally {
+            input.value = "";
+        }
+    }
+
     Painting.screenToWorldCoords = (coords) => {
         let out = render.screenToWorld(coords);
         return [out[0] / 1000, out[1] / 1000];
@@ -156,25 +324,30 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
     const worker = new window.Worker("build/_worker.js");
     let working = false;
     let workRequested = false;
-    let elapsedTimeHistory = [];
+    let elapsedTimeHistory: number[] = [];
 
     worker.addEventListener('messageerror', event => {
         console.log("WORKER ERROR", event);
     });
-    
+
     worker.addEventListener('message', event => {
         working = false;
         let {elapsed, numRiverTriangles, quad_elements_buffer, a_quad_em_buffer, a_river_xyww_buffer} = event.data;
         elapsedTimeHistory.push(elapsed | 0);
         if (elapsedTimeHistory.length > 10) { elapsedTimeHistory.splice(0, 1); }
+
         const timingDiv = document.getElementById('timing');
-        if (timingDiv) { timingDiv.innerText = `${elapsedTimeHistory.join(' ')} milliseconds`; }
+        if (timingDiv) {
+            timingDiv.innerText = `${elapsedTimeHistory.join(' ')} milliseconds`;
+        }
+
         render.quad_elements = new Int32Array(quad_elements_buffer);
         render.a_quad_em = new Float32Array(a_quad_em_buffer);
         render.a_river_xyww = new Float32Array(a_river_xyww_buffer);
         render.numRiverTriangles = numRiverTriangles;
         render.updateMap();
         redraw();
+
         if (workRequested) {
             requestAnimationFrame(() => {
                 workRequested = false;
@@ -189,12 +362,13 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
         (document.querySelector("#slider-island input") as HTMLInputElement).disabled = userHasPainted;
         (document.querySelector("#button-reset") as HTMLInputElement).disabled = !userHasPainted;
     }
-    
+
     function generate() {
         if (!working) {
             working = true;
             Painting.setElevationParam(param.elevation);
             updateUI();
+
             worker.postMessage({
                 param,
                 constraints: {
@@ -208,8 +382,7 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
                 render.quad_elements.buffer,
                 render.a_quad_em.buffer,
                 render.a_river_xyww.buffer,
-            ]
-            );
+            ]);
         } else {
             workRequested = true;
         }
@@ -220,6 +393,24 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
     const downloadButton = document.getElementById('button-download');
     if (downloadButton) downloadButton.addEventListener('click', download);
+
+    const downloadConfigButton = document.getElementById('button-download-config');
+    if (downloadConfigButton) downloadConfigButton.addEventListener('click', downloadConfig);
+
+    const importConfigButton = document.getElementById('button-import-config');
+    if (importConfigButton) importConfigButton.addEventListener('click', importConfig);
+
+    const importConfigInput = document.getElementById('input-import-config') as HTMLInputElement | null;
+    if (importConfigInput) importConfigInput.addEventListener('change', handleImportConfig);
+
+    const downloadPaintButton = document.getElementById('button-download-paint');
+    if (downloadPaintButton) downloadPaintButton.addEventListener('click', downloadPaint);
+
+    const importPaintButton = document.getElementById('button-import-paint');
+    if (importPaintButton) importPaintButton.addEventListener('click', importPaint);
+
+    const importPaintInput = document.getElementById('input-import-paint') as HTMLInputElement | null;
+    if (importPaintInput) importPaintInput.addEventListener('change', handleImportPaint);
 }
 
 makeMesh().then(main);

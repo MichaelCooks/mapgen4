@@ -1,4 +1,5 @@
 <div style="width:auto">
+    
 <style>
     html, body { margin: 0; padding: 0; }
     button { text-align: center; padding: 0; background: hsl(60,20%,90%); border-radius: 4px; cursor: pointer; }
@@ -74,6 +75,7 @@
     }
 </style>
 
+
   <div id="ui">
   
   <button id="tiny"><svg viewBox="-50 -50 100 100"><circle r="7"/></svg></button>
@@ -87,11 +89,50 @@
   <button id="mountain" title="Mountain"><svg viewBox="-50 -50 100 100"><text y="45">Mountains</text><g fill="hsl(60,50%,40%)" stroke="white" stroke-width="2"><path d="M -30,20 l 30,-60 l 30,60 z"/><path d="M -50,20 l 20,-40 l 20,40 z"/><path d="M 10,20 l 15,-30 l 15,30 z"/></g></svg></button>
 
   <div id="sliders">
-    <button id="button-reset">Reset</button>
+    <button id="button-reset">Reset Terrain</button>
   </div>
   
-  <div id="map"><canvas id="mapgen4" width="2048" height="2048"/></div>
+  <div id="map"><canvas id="mapgen4" width="2048" height="2048"></div>
   </div>
   <script defer="defer" src="build/_bundle.js"></script>
 </div>
 
+<button id="button-download-config">Export current config</button>
+<button id="button-import-config">Import config</button>
+<input id="input-import-config" type="file" accept="application/json,.json" style="display:none">
+
+<button id="button-download-paint">Export painted terrain</button>
+<button id="button-import-paint">Import painted terrain</button>
+<input id="input-import-paint" type="file" accept="application/json,.json" style="display:none">
+
+
+
+<script>
+  function exportCurrentConfig(currentParams) {
+    if (!currentParams) {
+      alert("No live config found yet.");
+      console.log("window.param is", window.param);
+      return;
+    }
+
+    const json = JSON.stringify(currentParams, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "current-config.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+  }
+
+  window.addEventListener("load", () => {
+    const btn = document.getElementById("export-config-btn");
+    btn.addEventListener("click", () => {
+      exportCurrentConfig(window.param);
+    });
+  });
+</script>
