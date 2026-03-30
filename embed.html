@@ -107,32 +107,3 @@
 
 
 
-<script>
-  function exportCurrentConfig(currentParams) {
-    if (!currentParams) {
-      alert("No live config found yet.");
-      console.log("window.param is", window.param);
-      return;
-    }
-
-    const json = JSON.stringify(currentParams, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "current-config.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(url);
-  }
-
-  window.addEventListener("load", () => {
-    const btn = document.getElementById("export-config-btn");
-    btn.addEventListener("click", () => {
-      exportCurrentConfig(window.param);
-    });
-  });
-</script>
