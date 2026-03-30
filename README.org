@@ -1,5 +1,9 @@
-#+title: Mapgen4
-#+date: <2018-12-24>
+#+title: Mapgen4 (Michael's version!)
+#+date: <2026-03-30>
+
+* Hi there! This is my own fork of Mapgen4. This version allows you to import/export your generated maps using .json data. Below is the original developer's README.md. Enjoy!
+
+--
 
 [[http://unmaintained.tech/][http://unmaintained.tech/badge.svg]]
 
