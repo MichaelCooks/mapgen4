@@ -3,8 +3,13 @@
     <style>
       /* ─── Base reset ─────────────────────────────────────────── */
       html, body { margin: 0; padding: 0; }
+
       h1 {
-        font-size: 6vh;
+        font-size: 46px;
+      }
+
+      #last-updated {
+        font-size: 12px;
       }
   
       /* ─── Colour tokens ──────────────────────────────────────── */
@@ -358,7 +363,11 @@
     </style>
   
     <div id="ui">
-      <h1>Michael's Mapgen4 Fork</h1>
+        <div>
+            <h1>Michael's Mapgen4 Fork</h1>
+            <p id="last-updated">Last updated: 2026</p>
+        </div>
+      
   
       <button id="tiny"><svg viewBox="-50 -50 100 100"><circle r="7"/></svg></button>
       <button id="small"><svg viewBox="-50 -50 100 100"><circle r="20"/></svg></button>
@@ -477,4 +486,33 @@
   
     <script defer src="build/_bundle.js"></script>
     <script defer src="icon-layer.js"></script>
+
+    <script>
+        (function () {
+          const USER = "MichaelCooks";
+          const REPO = "mapgen4";
+      
+          fetch(`https://api.github.com/repos/${USER}/${REPO}/commits`)
+            .then(response => response.json())
+            .then(data => {
+              if (!data || !data[0]) return;
+      
+              const isoDate = data[0].commit.committer.date;
+              const formatted = new Date(isoDate).toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              });
+      
+              document.getElementById("last-updated").textContent =
+                "Last updated: " + formatted;
+            })
+            .catch(err => {
+              console.error("Failed to fetch last updated time:", err);
+              document.getElementById("last-updated").textContent =
+                "Last updated: unavailable";
+            });
+        })();
+      </script>
+
   </div>
