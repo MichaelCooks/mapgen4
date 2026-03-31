@@ -18,13 +18,12 @@ function main() {
     // original binary output (keep this for the app)
     fs.writeFileSync(`build/points-${param.spacing}.data`, toPointsFile(p));
 
-    // 👇 ADD THIS: export config
     fs.writeFileSync(
         `build/config-${param.spacing}.json`,
         JSON.stringify(param, null, 2)
     );
 
-    // 👇 OPTIONAL: export points as JSON too
+    // export points as JSON too
     fs.writeFileSync(
         `build/points-${param.spacing}.json`,
         JSON.stringify(p, null, 2)
