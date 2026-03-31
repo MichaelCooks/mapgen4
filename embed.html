@@ -3,22 +3,28 @@
     <style>
       /* ─── Base reset ─────────────────────────────────────────── */
       html, body { margin: 0; padding: 0; }
-    
+      h1 {
+        font-size: 6vh;
+      }
+  
       /* ─── Colour tokens ──────────────────────────────────────── */
       :root {
-        --cream:        hsl(48, 30%, 92%);
-        --cream-mid:    hsl(48, 25%, 86%);
-        --cream-dark:   hsl(48, 20%, 75%);
-        --highlight:    hsl(55, 100%, 78%);
-        --blue-sel:     hsl(220, 50%, 50%);
-        --red-accent:   hsl(0,  50%, 50%);
-        --shadow:       hsla(30, 20%, 20%, 0.18);
-        --text:         hsl(30, 15%, 20%);
+        --cream: hsl(48, 30%, 92%);
+        --cream-mid: hsl(48, 25%, 86%);
+        --cream-dark: hsl(48, 20%, 75%);
+        --highlight: hsl(55, 100%, 78%);
+        --blue-sel: hsl(220, 50%, 50%);
+        --red-accent: hsl(0, 50%, 50%);
+        --shadow: hsla(30, 20%, 20%, 0.18);
+        --text: hsl(30, 15%, 20%);
         --github-star-bg: hsl(210, 16%, 13%);
+  
+        --toolbar-control-height: 38px;
+        --toolbar-control-radius: 6px;
+        --toolbar-icon-button-size: 38px;
       }
-    
+  
       /* ─── Toolbar buttons (size / terrain) ───────────────────── */
-
       button {
         text-align: center;
         padding: 0;
@@ -29,23 +35,27 @@
         box-shadow: 0 2px 4px var(--shadow), inset 0 1px 0 hsla(0,0%,100%,0.55);
         transition: background 0.12s, box-shadow 0.12s, transform 0.08s;
       }
+  
       button:hover:not(:disabled) {
         background: var(--cream-mid);
         box-shadow: 0 3px 7px var(--shadow), inset 0 1px 0 hsla(0,0%,100%,0.55);
         transform: translateY(-1px);
       }
+  
       button:active:not(:disabled) {
         transform: translateY(0);
         box-shadow: 0 1px 2px var(--shadow);
       }
+  
       button svg { width: 100%; height: 100%; }
+  
       button text {
         text-anchor: middle;
         font-size: 20px;
         font-family: Georgia, serif;
         fill: var(--text);
       }
-    
+  
       /* Active / selected state */
       button.current-control {
         background: var(--highlight);
@@ -53,9 +63,10 @@
         outline-offset: 1px;
         box-shadow: 0 2px 8px hsla(220,50%,50%,0.25), inset 0 1px 0 hsla(0,0%,100%,0.55);
       }
+  
       button:focus { outline: none; }
       button:disabled, input:disabled { cursor: not-allowed; opacity: 0.3; }
-    
+  
       /* ─── Sliders ─────────────────────────────────────────────── */
       input[type="range"] {
         cursor: ew-resize;
@@ -63,7 +74,7 @@
         accent-color: var(--red-accent);
         height: 4px;
       }
-    
+  
       /* ─── Grid layout (landscape) ────────────────────────────── */
       #ui {
         display: grid;
@@ -76,8 +87,8 @@
         box-sizing: border-box;
         background: hsl(48, 25%, 96%);
       }
-    
-      #map      { grid-area: 1 / 2 / span 4 / span 1; width:100%; height:100%; }
+  
+      #map      { grid-area: 1 / 2 / span 4 / span 1; width: 100%; height: 100%; }
       #tiny     { grid-area: 1 / 3 / span 1 / span 1; }
       #small    { grid-area: 1 / 4 / span 1 / span 1; }
       #medium   { grid-area: 1 / 5 / span 1 / span 1; }
@@ -87,7 +98,7 @@
       #valley   { grid-area: 3 / 3 / span 1 / span 2; }
       #mountain { grid-area: 3 / 5 / span 1 / span 2; }
       #sliders  { grid-area: 4 / 3 / span 1 / span 4; overflow-y: scroll; overflow-x: clip; line-height: 1.2; }
-    
+  
       /* ─── Portrait layout ────────────────────────────────────── */
       @media (orientation: portrait) {
         #ui {
@@ -95,6 +106,7 @@
           grid-template-columns: 74px 74px calc(100vmin - 50px - 148px - 40px);
           padding: 8px 10px 4px;
         }
+  
         #map      { grid-area: 1 / 1 / span 1 / span 6; }
         #tiny     { grid-area: 2 / 1 / span 1 / span 1; }
         #small    { grid-area: 3 / 1 / span 1 / span 1; }
@@ -106,8 +118,12 @@
         #mountain { grid-area: 5 / 2 / span 1 / span 1; }
         #sliders  { grid-area: 2 / 3 / span 5 / span 1; justify-self: end; width: 100%; column-width: 20ch; }
       }
-    
+  
       /* ─── Canvas ─────────────────────────────────────────────── */
+      #map {
+        position: relative;
+      }
+  
       #mapgen4 {
         width: 100%;
         height: 100%;
@@ -115,7 +131,44 @@
         border-radius: 4px;
         box-shadow: 0 3px 12px var(--shadow);
       }
-    
+  
+      #icon-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+  
+      #icon-layer.icon-mode-active {
+        pointer-events: auto;
+        cursor: copy;
+      }
+  
+      .map-icon {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: hsl(10, 35%, 25%);
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+        user-select: none;
+      }
+  
+      .map-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+  
+      .map-icon.selected {
+        outline: 2px solid var(--blue-sel);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+  
       /* ─── Sliders panel ──────────────────────────────────────── */
       #sliders {
         background: var(--cream);
@@ -128,6 +181,7 @@
         scrollbar-width: thin;
         scrollbar-color: var(--cream-dark) transparent;
       }
+  
       #sliders h3 {
         background: linear-gradient(to right, var(--cream-mid), transparent);
         border-left: 3px solid var(--cream-dark);
@@ -141,23 +195,26 @@
         color: var(--text);
         border-radius: 0 3px 3px 0;
       }
+  
       #sliders label {
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 4px;
         font-size: 66%;
         color: var(--text);
-        margin-bottom: 7px;
+        margin-bottom: 10px;
       }
+  
       #sliders label span {
         font-family: 'Courier New', Courier, monospace;
         color: hsl(30, 15%, 35%);
       }
+  
       #sliders label input[type="range"] {
         width: 100%;
         box-sizing: border-box;
       }
-    
+  
       /* ─── Reset button ───────────────────────────────────────── */
       #button-reset {
         display: block;
@@ -170,8 +227,9 @@
         color: var(--text);
         border-radius: 5px;
       }
-    
-      /* ─── Bottom toolbar (export / import / save) ────────────── */
+  
+      /* ─── Toolbars ───────────────────────────────────────────── */
+      .icon-toolbar,
       .toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -179,23 +237,100 @@
         gap: 8px;
         padding: 10px 14px 12px;
         background: var(--cream-mid);
-        border-top: 1.5px solid var(--cream-dark);
       }
-      .toolbar-spacer { margin-left: auto; }
+  
+      .icon-toolbar {
+        border-top: 1.5px solid var(--cream-dark);
+        border-bottom: 1.5px solid var(--cream-dark);
+      }
+  
+      .toolbar {
+        border-top: none;
+      }
+  
+      .toolbar-spacer {
+        margin-left: auto;
+      }
+  
+      .icon-toolbar button,
+      .toolbar button,
+      .github-link,
+      #icon-color-picker {
+        height: var(--toolbar-control-height);
+        box-sizing: border-box;
+        border-radius: var(--toolbar-control-radius);
+      }
+  
+      .icon-toolbar button,
       .toolbar button {
-        padding: 5px 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 14px;
         font-family: Georgia, serif;
         font-size: 72%;
         letter-spacing: 0.04em;
         color: var(--text);
-        height: auto;
-        line-height: 1.4;
+        line-height: 1;
+        vertical-align: middle;
       }
-    
-      /* ─── GitHub star link ───────────────────────────────────── */
-      #github-star {
-        display: inline-block;
-        padding: 5px 14px;
+  
+      .toolbar-label {
+        display: inline-flex;
+        align-items: center;
+        height: var(--toolbar-control-height);
+        font-size: 72%;
+        color: var(--text);
+        font-family: Georgia, serif;
+        line-height: 1;
+      }
+  
+      #icon-color-picker {
+        width: 48px;
+        min-width: 48px;
+        padding: 2px;
+        border: 1.5px solid var(--cream-dark);
+        background: var(--cream);
+        cursor: pointer;
+        vertical-align: middle;
+      }
+  
+      #icon-town,
+      #icon-castle,
+      #icon-city,
+      #icon-tree {
+        width: var(--toolbar-icon-button-size);
+        min-width: var(--toolbar-icon-button-size);
+        height: var(--toolbar-icon-button-size);
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #6b3f2a;
+        line-height: 1;
+      }
+  
+      #icon-town svg,
+      #icon-castle svg,
+      #icon-city svg,
+      #icon-tree svg {
+        width: 22px;
+        height: 22px;
+        display: block;
+      }
+  
+      #button-delete-mode.current-control {
+        background: hsl(8, 85%, 82%);
+        outline: 2px solid hsl(0, 60%, 45%);
+        outline-offset: 1px;
+      }
+  
+      /* ─── GitHub links ───────────────────────────────────────── */
+      .github-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 14px;
         font-family: Georgia, serif;
         font-size: 72%;
         letter-spacing: 0.04em;
@@ -203,57 +338,143 @@
         text-decoration: none;
         background: var(--cream);
         border: 1.5px solid var(--cream-dark);
-        border-radius: 6px;
         box-shadow: 0 2px 4px var(--shadow), inset 0 1px 0 hsla(0,0%,100%,0.55);
         transition: background 0.12s, box-shadow 0.12s, transform 0.08s;
-        line-height: 1.4;
+        line-height: 1;
         background-color: var(--github-star-bg);
+        vertical-align: middle;
       }
-      #github-star:hover {
+  
+      .github-link:hover {
         background: var(--github-star-bg);
         box-shadow: 0 3px 7px var(--shadow), inset 0 1px 0 hsla(0,0%,100%,0.55);
         transform: translateY(-1px);
       }
-      #github-star:active {
+  
+      .github-link:active {
         transform: translateY(0);
         box-shadow: 0 1px 2px var(--shadow);
       }
     </style>
-    
-      <div id="ui">
-    
-        <button id="tiny"  ><svg viewBox="-50 -50 100 100"><circle r="7"/></svg></button>
-        <button id="small" ><svg viewBox="-50 -50 100 100"><circle r="20"/></svg></button>
-        <button id="medium"><svg viewBox="-50 -50 100 100"><circle r="35"/></svg></button>
-        <button id="large" ><svg viewBox="-50 -50 100 100"><circle r="50"/></svg></button>
-    
-        <button id="ocean"    title="Ocean"    ><svg viewBox="-50 -50 100 100"><text y="45">Ocean</text><path d="M -50,-30 q 25,-20 50,0 q 25,20 50,0 l 0,50 l -100,0 z" fill="hsl(240,50%,40%)"/></svg></button>
-        <button id="shallow"  title="Water"    ><svg viewBox="-50 -50 100 100"><text y="45">Water</text><path d="M -50,-20 q 15,20 30,0 q 20,20 40,0 q 15,20 30,0 l 0,40 l -100,0 z" fill="hsl(200,50%,70%)"/></svg></button>
-        <button id="valley"   title="Valley"   ><svg viewBox="-50 -50 100 100"><text y="45">Valley</text><path d="M -50,-20 c 20,10 80,10 100,0 l 0,40 l -100,0 z" fill="hsl(100,40%,60%)"/></svg></button>
-        <button id="mountain" title="Mountain" ><svg viewBox="-50 -50 100 100"><text y="45">Mountains</text><g fill="hsl(60,50%,40%)" stroke="white" stroke-width="2"><path d="M -30,20 l 30,-60 l 30,60 z"/><path d="M -50,20 l 20,-40 l 20,40 z"/><path d="M 10,20 l 15,-30 l 15,30 z"/></g></svg></button>
-    
-        <div id="sliders">
-          <button id="button-reset">Reset Terrain</button>
-        </div>
-    
-        <div id="map"><canvas id="mapgen4" width="2048" height="2048"></canvas></div>
-    
+  
+    <div id="ui">
+      <h1>Michael's Mapgen4 Fork</h1>
+  
+      <button id="tiny"><svg viewBox="-50 -50 100 100"><circle r="7"/></svg></button>
+      <button id="small"><svg viewBox="-50 -50 100 100"><circle r="20"/></svg></button>
+      <button id="medium"><svg viewBox="-50 -50 100 100"><circle r="35"/></svg></button>
+      <button id="large"><svg viewBox="-50 -50 100 100"><circle r="50"/></svg></button>
+  
+      <button id="ocean" title="Ocean">
+        <svg viewBox="-50 -50 100 100">
+          <text y="45">Ocean</text>
+          <path d="M -50,-30 q 25,-20 50,0 q 25,20 50,0 l 0,50 l -100,0 z" fill="hsl(240,50%,40%)"/>
+        </svg>
+      </button>
+  
+      <button id="shallow" title="Water">
+        <svg viewBox="-50 -50 100 100">
+          <text y="45">Water</text>
+          <path d="M -50,-20 q 15,20 30,0 q 20,20 40,0 q 15,20 30,0 l 0,40 l -100,0 z" fill="hsl(200,50%,70%)"/>
+        </svg>
+      </button>
+  
+      <button id="valley" title="Valley">
+        <svg viewBox="-50 -50 100 100">
+          <text y="45">Valley</text>
+          <path d="M -50,-20 c 20,10 80,10 100,0 l 0,40 l -100,0 z" fill="hsl(100,40%,60%)"/>
+        </svg>
+      </button>
+  
+      <button id="mountain" title="Mountain">
+        <svg viewBox="-50 -50 100 100">
+          <text y="45">Mountains</text>
+          <g fill="hsl(60,50%,40%)" stroke="white" stroke-width="2">
+            <path d="M -30,20 l 30,-60 l 30,60 z"/>
+            <path d="M -50,20 l 20,-40 l 20,40 z"/>
+            <path d="M 10,20 l 15,-30 l 15,30 z"/>
+          </g>
+        </svg>
+      </button>
+  
+      <div id="sliders">
+        <button id="button-reset">Reset Terrain</button>
       </div>
-    
-      <div class="toolbar">
-        <button id="button-download-config">Export config</button>
-        <button id="button-import-config">Import config</button>
-        <input  id="input-import-config" type="file" accept="application/json,.json" style="display:none">
-    
-        <button id="button-download-paint">Export terrain</button>
-        <button id="button-import-paint">Import terrain</button>
-        <input  id="input-import-paint" type="file" accept="application/json,.json" style="display:none">
-    
-        <button id="button-download">Save as PNG</button>
-        <a id="github-star" href="https://github.com/MichaelCooks/mapgen4/wiki/Using-Import,-Export,-and-Save" target="_blank" rel="noopener">What do these buttons do?</a>
-        <span class="toolbar-spacer"></span>
-        <a id="github-star" href="https://github.com/MichaelCooks/mapgen4" target="_blank" rel="noopener">Star on GitHub</a>
+  
+      <div id="map">
+        <canvas id="mapgen4" width="2048" height="2048"></canvas>
+        <div id="icon-layer" aria-label="Map icons layer"></div>
       </div>
-    
-      <script defer src="build/_bundle.js"></script>
     </div>
+  
+    <div class="icon-toolbar">
+      <button id="button-icon-mode">Place Icons: Off</button>
+      <button id="button-delete-mode">Delete Icons: Off</button>
+      <button id="button-clear-icons">Clear All Icons</button>
+  
+
+      <input
+        id="icon-color-picker"
+        type="color"
+        value="#6b3f2a"
+        title="Choose icon color"
+      >
+  
+      <button id="icon-town" title="Town">
+        <svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true">
+          <rect x="12" y="26" width="40" height="24" rx="2" fill="currentColor"></rect>
+          <polygon points="32,10 8,28 56,28" fill="currentColor"></polygon>
+          <rect x="28" y="36" width="8" height="14" fill="white"></rect>
+        </svg>
+      </button>
+  
+      <button id="icon-castle" title="Castle">
+        <svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true">
+          <rect x="10" y="24" width="44" height="28" fill="currentColor"></rect>
+          <rect x="14" y="14" width="8" height="14" fill="currentColor"></rect>
+          <rect x="28" y="14" width="8" height="14" fill="currentColor"></rect>
+          <rect x="42" y="14" width="8" height="14" fill="currentColor"></rect>
+          <rect x="28" y="36" width="8" height="16" fill="white"></rect>
+        </svg>
+      </button>
+  
+      <button id="icon-city" title="City">
+        <svg xmlns="http://www.w3.org/2000/svg" baseProfile="full" viewBox="0 0 76 76">
+            <rect x="23.173" y="37.206" width="13.936" height="17.339" fill="currentColor"/>
+            <rect x="24.631" y="24.323" width="11.019" height="11.019" fill="currentColor"/>
+            <rect x="45.049" y="33.722" width="11.181" height="22.038" fill="currentColor"/>
+            <path fill="currentColor" d="M44.333 30.083H57V57H44.333V30.083zm1.98 5.146V38h2.77v-2.77h-2.77zm5.937 0V38h2.77v-2.77h-2.77zm-5.938 4.75v2.771h2.771v-2.77h-2.77zm5.938 0v2.771h2.77v-2.77h-2.77zm-5.938 4.75V47.5h2.771v-2.77h-2.77zm5.938 0V47.5h2.77v-2.77h-2.77zm-5.938 4.75v2.771h2.771v-2.77h-2.77zm5.938 0v2.771h2.77v-2.77h-2.77zm-28.5-24.146l1.583-3.166h1.584v-3.959H28.5v3.959h3.167v-3.959h1.583v3.959h1.583l1.584 3.166v9.5h2.375l2.375 2.375V57H19V37.208l2.375-2.375h2.375v-9.5zm1.98 1.98v2.77h2.374v-2.77H25.73zm6.332 0v2.77h2.376v-2.77h-2.376zm-6.333 4.75v2.77h2.375v-2.77H25.73zm6.334 0v2.77h2.374v-2.77h-2.374zm-1.188 7.916h-1.98v2.771h1.98v-2.77zm-6.333 0v2.771h2.375v-2.77h-2.375zm11.479 0H33.25v2.771h2.77v-2.77zm-5.146 4.75h-1.98V47.5h1.98v-2.77zm-3.958 0h-2.375V47.5h2.375v-2.77zm9.104 0H33.25V47.5h2.77v-2.77zm-5.146 4.75h-1.98v2.771h1.98v-2.77zm-3.958 0h-2.375v2.771h2.375v-2.77zm9.104 0H33.25v2.771h2.77v-2.77z"/>
+          </svg>
+      </button>
+  
+      <button id="icon-tree" title="Tree">
+        <svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true">
+          <polygon points="32,10 16,32 48,32" fill="currentColor"></polygon>
+          <polygon points="32,20 14,42 50,42" fill="currentColor"></polygon>
+          <rect x="28" y="42" width="8" height="12" fill="currentColor"></rect>
+        </svg>
+      </button>
+  
+      <button id="button-download-icons">Export icons</button>
+      <button id="button-import-icons">Import icons</button>
+      <input id="input-import-icons" type="file" accept="application/json,.json" style="display:none">
+    </div>
+  
+    <div class="toolbar">
+      <button id="button-download-config">Export config</button>
+      <button id="button-import-config">Import config</button>
+      <input id="input-import-config" type="file" accept="application/json,.json" style="display:none">
+  
+      <button id="button-download-paint">Export terrain</button>
+      <button id="button-import-paint">Import terrain</button>
+      <input id="input-import-paint" type="file" accept="application/json,.json" style="display:none">
+  
+      <button id="button-download">Save as PNG</button>
+      <span class="toolbar-spacer"></span>
+      <a class="github-link" href="https://github.com/MichaelCooks/mapgen4/wiki/Using-the-Toolbar" target="_blank" rel="noopener"><i>"What do all these buttons do?"</i></a>
+      <a class="github-link" href="https://github.com/MichaelCooks/mapgen4" target="_blank" rel="noopener">Star on GitHub</a>
+    </div>
+  
+    <script defer src="build/_bundle.js"></script>
+    <script defer src="icon-layer.js"></script>
+  </div>
