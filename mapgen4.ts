@@ -61,6 +61,8 @@ const initialParams = {
         ['outline_coast', 0, 0, 1],
         ['outline_water', 13.0, 0, 20], // things start going wrong when this is high
         ['biome_colors', 1, 0, 1],
+        ['spin_speed_deg_per_sec', 0, -60, 60], // 0 = off
+        ['obj_export_plate_height', 10, 0, 100],
     ],
 } as const;
 
@@ -124,8 +126,6 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
             slider.addEventListener('touchmove', handleTouch);
             slider.addEventListener('touchstart', handleTouch);
 
-
-
             let controls = document.createElement('div');
             controls.style.display = 'flex';
             controls.style.alignItems = 'center';
@@ -133,7 +133,6 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
             slider.style.flex = '1 1 auto';
             controls.appendChild(slider);
-
 
             let label = document.createElement('label');
             label.setAttribute('id', `slider-${name}`);
@@ -151,6 +150,33 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
         render.updateView(param.render);
     }
 
+    function wrapDegrees(angle: number): number {
+        return ((angle + 180) % 360 + 360) % 360 - 180;
+    }
+
+    let lastSpinTime = performance.now();
+
+    function spinLoop(now: number) {
+        const dt = Math.min(0.05, (now - lastSpinTime) / 1000);
+        lastSpinTime = now;
+
+        const speed = param.render.spin_speed_deg_per_sec ?? 0;
+        if (speed !== 0) {
+            param.render.rotate_deg = wrapDegrees(
+                param.render.rotate_deg + speed * dt
+            );
+
+            const slider = sliderMap.get('render.rotate_deg') as HTMLInputElement | undefined;
+            if (slider) {
+                slider.value = param.render.rotate_deg.toString();
+            }
+
+            redraw();
+        }
+
+        requestAnimationFrame(spinLoop);
+    }
+
     /* Ask render module to copy WebGL into Canvas */
     function download() {
         render.screenshotCallback = () => {
@@ -163,6 +189,290 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
             });
         };
         render.updateView(param.render);
+    }
+
+    function downloadTextFile(filename: string, text: string, mime = 'text/plain') {
+        const a = document.createElement('a');
+        const blob = new Blob([text], {type: mime});
+        a.href = URL.createObjectURL(blob);
+        a.setAttribute('download', filename);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function downloadBlobFile(filename: string, blob: Blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.setAttribute('download', filename);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    async function readFramebufferToPNGBlob(fb: { id: WebGLFramebuffer | null }): Promise<Blob> {
+        return new Promise((resolve, reject) => {
+            const anyRender = render as any;
+            const gl = anyRender.webgl.gl as WebGLRenderingContext | WebGL2RenderingContext;
+            const canvas = render.screenshotCanvas;
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+                reject(new Error("Could not get 2D context"));
+                return;
+            }
+
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.createImageData(width, height);
+            const bytesPerRow = width * 4;
+            const buffer = new Uint8Array(bytesPerRow * height);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fb.id);
+            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+
+            for (let y = 0; y < height; y++) {
+                const srcStart = y * bytesPerRow;
+                const srcEnd = srcStart + bytesPerRow;
+                const dstStart = (height - 1 - y) * bytesPerRow;
+                imageData.data.set(buffer.subarray(srcStart, srcEnd), dstStart);
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            canvas.toBlob(blob => {
+                if (!blob) reject(new Error("Could not encode PNG"));
+                else resolve(blob);
+            }, 'image/png');
+        });
+    }
+
+    async function bakeIslandTextureBlob(): Promise<Blob> {
+        const anyRender = render as any;
+
+        const bakeParam = {
+            ...param.render,
+            tilt_deg: 0,
+            rotate_deg: 0,
+            ambient: 1,
+            slope: 0,
+            flat: 0,
+            outline_depth: 0,
+            outline_strength: 0,
+            outline_threshold: 0,
+            outline_coast: 0,
+        };
+
+        anyRender.fbo_river.clear(0, 0, 0, 0);
+        anyRender.fbo_land.clear(0, 0, 0, 1);
+        anyRender.fbo_depth.clear(0, 0, 0, 1);
+        anyRender.fbo_drape.clear(0, 0, 0, 0);
+
+        if (render.numRiverTriangles > 0) {
+            anyRender.drawRivers();
+        }
+
+        anyRender.drawLand(bakeParam.outline_water);
+
+        // Bake in top-down UV space
+        anyRender.projection.set(anyRender.topdown);
+        anyRender.drawDrape(bakeParam);
+
+        return await readFramebufferToPNGBlob(anyRender.fbo_drape);
+    }
+
+    async function downloadOBJ() {
+        const xy = render.a_quad_xy;
+        const em = render.a_quad_em;
+        const elements = render.quad_elements;
+
+        const mountainHeight = param.render.mountain_height;
+        const baseplateHeight = param.render.obj_export_plate_height ?? 10;
+
+        const seed = param.elevation.seed;
+        const objFilename = `mapgen4-${seed}-solid.obj`;
+        const mtlFilename = `mapgen4-${seed}-solid.mtl`;
+        const pngFilename = `mapgen4-${seed}-three_d-texture.png`;
+
+        const vertexCount = xy.length / 2;
+        const zByVertex = new Float32Array(vertexCount);
+
+        type Face = [number, number, number];
+        const topFaces: Face[] = [];
+        const used = new Uint8Array(vertexCount);
+
+        // Build the top surface from the existing land mesh.
+        for (let i = 0; i < render.quad_elements_length; i += 3) {
+            const a = elements[i];
+            const b = elements[i + 1];
+            const c = elements[i + 2];
+
+            if (a < 0 || b < 0 || c < 0) continue;
+            if (a === b || b === c || c === a) continue;
+
+            const za = Math.max(0, em[2 * a]) * mountainHeight;
+            const zb = Math.max(0, em[2 * b]) * mountainHeight;
+            const zc = Math.max(0, em[2 * c]) * mountainHeight;
+
+            zByVertex[a] = za;
+            zByVertex[b] = zb;
+            zByVertex[c] = zc;
+
+            // Skip triangles entirely underwater.
+            if (za <= 0 && zb <= 0 && zc <= 0) continue;
+
+            used[a] = 1;
+            used[b] = 1;
+            used[c] = 1;
+            topFaces.push([a, b, c]);
+        }
+
+        if (topFaces.length === 0) {
+            alert("No land mesh is ready yet. Generate a map first.");
+            return;
+        }
+
+        let textureBlob: Blob;
+        try {
+            textureBlob = await bakeIslandTextureBlob();
+        } catch (err) {
+            console.error("Failed to bake island texture", err);
+            alert("Could not bake island texture PNG.");
+            return;
+        }
+
+        const lines: string[] = [];
+        lines.push(`# mapgen4 solid OBJ + texture export`);
+        lines.push(`mtllib ${mtlFilename}`);
+        lines.push(`o island_${seed}`);
+
+        const topObjIndex = new Int32Array(vertexCount);
+        const bottomObjIndex = new Int32Array(vertexCount);
+        const topUvIndex = new Int32Array(vertexCount);
+        topObjIndex.fill(-1);
+        bottomObjIndex.fill(-1);
+        topUvIndex.fill(-1);
+
+        let nextObjIndex = 1;
+        let nextUvIndex = 1;
+
+        function worldX(i: number) {
+            return xy[2 * i] - 500;
+        }
+
+        function worldMapY(i: number) {
+            return xy[2 * i + 1] - 500;
+        }
+
+        function u(i: number) {
+            return xy[2 * i] / 1000;
+        }
+
+        function v(i: number) {
+            return 1 - (xy[2 * i + 1] / 1000);
+        }
+
+        // Create top vertices
+        for (let i = 0; i < vertexCount; i++) {
+            if (!used[i]) continue;
+
+            const x = worldX(i);
+            const mapY = worldMapY(i);
+            const z = zByVertex[i];
+
+            // OBJ: Y is up
+            lines.push(`v ${x.toFixed(6)} ${z.toFixed(6)} ${(-mapY).toFixed(6)}`);
+            topObjIndex[i] = nextObjIndex++;
+        }
+
+        // Create bottom/baseplate vertices
+        for (let i = 0; i < vertexCount; i++) {
+            if (!used[i]) continue;
+
+            const x = worldX(i);
+            const mapY = worldMapY(i);
+
+            lines.push(`v ${x.toFixed(6)} ${(-baseplateHeight).toFixed(6)} ${(-mapY).toFixed(6)}`);
+            bottomObjIndex[i] = nextObjIndex++;
+        }
+
+        // UVs for top surface only
+        for (let i = 0; i < vertexCount; i++) {
+            if (!used[i]) continue;
+
+            lines.push(`vt ${u(i).toFixed(6)} ${v(i).toFixed(6)}`);
+            topUvIndex[i] = nextUvIndex++;
+        }
+
+        // Top faces with texture coordinates
+        lines.push(`usemtl island_top`);
+        for (const [a, b, c] of topFaces) {
+            lines.push(
+                `f ${topObjIndex[a]}/${topUvIndex[a]} ${topObjIndex[b]}/${topUvIndex[b]} ${topObjIndex[c]}/${topUvIndex[c]}`
+            );
+        }
+
+        // Bottom faces, reversed winding, no UVs
+        lines.push(`usemtl island_base`);
+        for (const [a, b, c] of topFaces) {
+            lines.push(`f ${bottomObjIndex[c]} ${bottomObjIndex[b]} ${bottomObjIndex[a]}`);
+        }
+
+        // Find boundary edges of the kept surface
+        const edgeMap = new Map<string, { count: number; a: number; b: number }>();
+
+        function addEdge(a: number, b: number) {
+            const key = a < b ? `${a},${b}` : `${b},${a}`;
+            const existing = edgeMap.get(key);
+            if (existing) {
+                existing.count++;
+            } else {
+                edgeMap.set(key, { count: 1, a, b }); // preserve top-face orientation
+            }
+        }
+
+        for (const [a, b, c] of topFaces) {
+            addEdge(a, b);
+            addEdge(b, c);
+            addEdge(c, a);
+        }
+
+        // Side walls down to the baseplate
+        for (const edge of edgeMap.values()) {
+            if (edge.count !== 1) continue;
+
+            const a = edge.a;
+            const b = edge.b;
+
+            const ta = topObjIndex[a];
+            const tb = topObjIndex[b];
+            const ba = bottomObjIndex[a];
+            const bb = bottomObjIndex[b];
+
+            if (ta < 0 || tb < 0 || ba < 0 || bb < 0) continue;
+
+            lines.push(`f ${ta} ${tb} ${bb}`);
+            lines.push(`f ${ta} ${bb} ${ba}`);
+        }
+
+        const mtl = [
+            `newmtl island_top`,
+            `Ka 1.000 1.000 1.000`,
+            `Kd 1.000 1.000 1.000`,
+            `Ks 0.000 0.000 0.000`,
+            `illum 1`,
+            `map_Kd ${pngFilename}`,
+            ``,
+            `newmtl island_base`,
+            `Ka 0.42 0.35 0.28`,
+            `Kd 0.42 0.35 0.28`,
+            `Ks 0.000 0.000 0.000`,
+            `illum 1`,
+        ].join('\n');
+
+        downloadTextFile(objFilename, lines.join('\n'), 'text/plain');
+        downloadTextFile(mtlFilename, mtl, 'text/plain');
+        downloadBlobFile(pngFilename, textureBlob);
+
+        redraw();
     }
 
     /* Download current live config as JSON */
@@ -256,18 +566,18 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
         const input = event.target as HTMLInputElement;
         const file = input.files?.[0];
         if (!file) return;
-    
+
         try {
             const text = await file.text();
             const imported = JSON.parse(text);
-    
+
             if (typeof imported !== 'object' || imported === null) {
                 throw new Error("Invalid paint file");
             }
-    
+
             let size = imported.size;
             let rawConstraints = imported.constraints;
-    
+
             if (
                 rawConstraints &&
                 typeof rawConstraints === 'object' &&
@@ -279,13 +589,13 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
                 }
                 rawConstraints = rawConstraints.constraints;
             }
-    
+
             if (rawConstraints === undefined && imported.elevation !== undefined) {
                 rawConstraints = imported.elevation;
             }
-    
+
             let constraintArray: number[];
-    
+
             if (Array.isArray(rawConstraints)) {
                 constraintArray = rawConstraints;
             } else if (rawConstraints && typeof rawConstraints === 'object') {
@@ -297,19 +607,19 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
             } else {
                 throw new Error("Paint file is missing constraints array");
             }
-    
+
             if (typeof size === 'number' && Number.isFinite(size)) {
                 Painting.size = size;
             }
-    
+
             const target = Painting.constraints as Float32Array;
             target.fill(0);
-    
+
             const n = Math.min(target.length, constraintArray.length);
             for (let i = 0; i < n; i++) {
                 target[i] = Number(constraintArray[i]) || 0;
             }
-    
+
             updateUI();
             requestAnimationFrame(() => {
                 generate();
@@ -422,6 +732,11 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
     const importPaintInput = document.getElementById('input-import-paint') as HTMLInputElement | null;
     if (importPaintInput) importPaintInput.addEventListener('change', handleImportPaint);
+
+    requestAnimationFrame(spinLoop);
+
+    const downloadObjButton = document.getElementById('button-download-obj');
+    if (downloadObjButton) downloadObjButton.addEventListener('click', downloadOBJ);
 }
 
 makeMesh().then(main);
