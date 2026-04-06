@@ -356,7 +356,7 @@ const frag_drape = `
                   u_ambient, u_overhead,
                   u_outline_strength, u_outline_coast, u_outline_water,
                   u_outline_depth, u_outline_threshold,
-                  u_biome_colors;
+                  u_biome_colors, u_show_elevation_overlay;
     in vec2 v_uv, v_xy, v_em;
     in float v_z;
     out vec4 out_fragcolor;
@@ -425,7 +425,45 @@ const frag_drape = `
         );
         if (z <= 0.5 && max(depth1, depth2) > 1.0/256.0 && neighboring_river <= 0.2) { outline += u_outline_coast * 256.0 * (max(depth1, depth2) - 2.0*(z - 0.5)); }
 
-        out_fragcolor = vec4(mix(biome_color, water_color.rgb, water_color.a) * light / outline, 1);
+        bool draw_contour_lines = false;
+        if (u_show_elevation_overlay > 0.5 && v_z >= 0.0) {
+            // Tint the existing map with discrete elevation colors while
+            // preserving the original lighting, depth shading, rivers, and
+            // black outline work. Then add black contour lines on top.
+            vec3 elevation_color;
+            if (z < 0.5) {
+                float ocean_depth = clamp((0.5 - z) * 2.0, 0.0, 1.0);
+                if (ocean_depth > 0.66) {
+                    elevation_color = vec3(0.05, 0.22, 0.55);
+                } else if (ocean_depth > 0.33) {
+                    elevation_color = vec3(0.10, 0.38, 0.75);
+                } else {
+                    elevation_color = vec3(0.35, 0.65, 0.90);
+                }
+                water_color.rgb = mix(water_color.rgb, elevation_color, 0.75);
+            } else {
+                float land_elevation = clamp((z - 0.5) * 2.0, 0.0, 1.0);
+                if (land_elevation < 0.25) {
+                    elevation_color = vec3(0.20, 0.65, 0.25);
+                } else if (land_elevation < 0.50) {
+                    elevation_color = vec3(0.92, 0.82, 0.22);
+                } else if (land_elevation < 0.75) {
+                    elevation_color = vec3(0.92, 0.52, 0.16);
+                } else {
+                    elevation_color = vec3(0.82, 0.16, 0.14);
+                }
+                biome_color = mix(biome_color, elevation_color, 0.75);
+                draw_contour_lines = true;
+            }
+        }
+
+        vec3 final_color = mix(biome_color, water_color.rgb, water_color.a) * light / outline;
+        if (draw_contour_lines) {
+            float contour = 1.0 - smoothstep(0.35, 1.0, fract(z * 40.0) / max(fwidth(z * 40.0), 1e-4));
+            final_color = mix(final_color, vec3(0.0), contour * 0.55);
+        }
+
+        out_fragcolor = vec4(final_color, 1);
     }`;
 
 const vert_final = `
@@ -654,6 +692,7 @@ export default class Renderer {
             gl.uniform1f(program.u_outline_strength, renderParam.outline_strength);
             gl.uniform1f(program.u_outline_threshold, renderParam.outline_threshold / 1000);
             gl.uniform1f(program.u_biome_colors, renderParam.biome_colors);
+            gl.uniform1f(program.u_show_elevation_overlay, renderParam.show_elevation_overlay ?? 0);
 
             this.texture_colormap.activate(gl.TEXTURE0, program.u_colormap);
             this.fbo_land.texture.activate(gl.TEXTURE1, program.u_elevation);

@@ -57,6 +57,7 @@ const initialParams = {
         ['mountain_height', 50, 0, 250],
         ['outline_depth', 1, 0, 2],
         ['outline_strength', 15, 0, 30],
+        ['elevation_contour_strength', 1.0, 0, 2],
         ['outline_threshold', 0, 0, 100],
         ['outline_coast', 0, 0, 1],
         ['outline_water', 13.0, 0, 20], // things start going wrong when this is high
@@ -66,9 +67,17 @@ const initialParams = {
     ],
 } as const;
 
+const initialToggles = {
+    render: [
+        ['show_elevation_overlay', false],
+    ],
+} as const;
+
 type Phase = keyof typeof initialParams;
+type TogglePhase = keyof typeof initialToggles;
 
 const sliderMap = new Map<string, HTMLInputElement>();
+const toggleMap = new Map<string, HTMLInputElement>();
 
 function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
@@ -79,6 +88,12 @@ function clamp(value: number, min: number, max: number): number {
 
 function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
     let render = new Renderer(mesh);
+
+    for (let phase of ['render'] as TogglePhase[]) {
+        for (let [name, initialValue] of initialToggles[phase]) {
+            param[phase][name] = Number(initialValue);
+        }
+    }
 
     /* set initial parameters */
     for (let phase of ['elevation', 'biomes', 'rivers', 'render'] as Phase[]) {
@@ -144,6 +159,37 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
             sliderMap.set(`${phase}.${name}`, slider);
         }
+    }
+
+    function addCheckbox(container: HTMLElement, phase: TogglePhase, name: string, initialValue: boolean) {
+        param[phase][name] = Number(initialValue);
+
+        const label = document.createElement('label');
+        label.setAttribute('id', `toggle-${name}`);
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '0.5em';
+
+        const checkbox = document.createElement('input');
+        checkbox.setAttribute('type', 'checkbox');
+        checkbox.checked = initialValue;
+        checkbox.addEventListener('input', () => {
+            param[phase][name] = checkbox.checked ? 1 : 0;
+            requestAnimationFrame(() => redraw());
+        });
+
+        const span = document.createElement('span');
+        span.appendChild(document.createTextNode('show elevation overlay'));
+
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        container.appendChild(label);
+        toggleMap.set(`${phase}.${name}`, checkbox);
+    }
+
+    const renderControls = document.querySelector('#sliders > div:last-of-type') as HTMLElement | null;
+    if (renderControls) {
+        addCheckbox(renderControls, 'render', 'show_elevation_overlay', false);
     }
 
     function redraw() {
@@ -508,6 +554,24 @@ function main({mesh, t_peaks}: { mesh: Mesh; t_peaks: number[]; }) {
 
                 const slider = sliderMap.get(`${phase}.${name}`);
                 if (slider) slider.value = clamped.toString();
+            }
+        }
+
+        for (let phase of ['render'] as TogglePhase[]) {
+            if (!imported[phase] || typeof imported[phase] !== 'object') continue;
+
+            for (let [name, initialValue] of initialToggles[phase]) {
+                const value = imported[phase][name];
+                const checked = typeof value === 'boolean'
+                    ? value
+                    : typeof value === 'number'
+                        ? value !== 0
+                        : initialValue;
+
+                param[phase][name] = checked ? 1 : 0;
+
+                const checkbox = toggleMap.get(`${phase}.${name}`);
+                if (checkbox) checkbox.checked = checked;
             }
         }
     }
